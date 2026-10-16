@@ -36,6 +36,20 @@ function fakeDeps({ env = "", history = "" } = {}) {
   };
 }
 
+function spyFetch(d) {
+  d.calls = [];
+  d.fetch = async (url) => {
+    d.calls.push(url);
+    return {
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => "text/plain" },
+      text: async () => "ok",
+    };
+  };
+  return d;
+}
+
 test("no args prints help", async () => {
   const { code, out } = await run([], fakeDeps());
   assert.equal(code, 0);
@@ -46,6 +60,22 @@ test("bad args exit code 2", async () => {
   const { code, out } = await run(["GET"], fakeDeps());
   assert.equal(code, 2);
   assert.match(out, /url is required/);
+});
+
+test("extra argument exits 2 without making a request", async () => {
+  const d = spyFetch(fakeDeps());
+  const { code, out } = await run(["GET", `${base}/x`, "unexpected"], d);
+  assert.equal(code, 2);
+  assert.match(out, /unexpected argument: unexpected/);
+  assert.deepEqual(d.calls, []);
+});
+
+test("an unreadable -f body file exits 2 without making a request", async () => {
+  const d = spyFetch(fakeDeps());
+  const { code, out } = await run(["POST", `${base}/x`, "-f", "missing.json"], d);
+  assert.equal(code, 2);
+  assert.match(out, /cannot read body file: missing\.json/);
+  assert.deepEqual(d.calls, []);
 });
 
 test("live request prints status and body, records history", async () => {

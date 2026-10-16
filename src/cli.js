@@ -94,6 +94,14 @@ export async function run(argv, injected = {}) {
 
   const withWarning = (out, warning) => (warning ? `${out}\n\n${warning}` : out);
 
+  if (parsed.bodyFile !== null) {
+    try {
+      deps.readFile(parsed.bodyFile);
+    } catch {
+      return { code: 2, out: `req: cannot read body file: ${parsed.bodyFile}` };
+    }
+  }
+
   let res;
   let failure;
   try {

@@ -136,6 +136,21 @@ test("env vars interpolate into URL and headers", async () => {
   assert.match(out, /"path": "\/items"/);
 });
 
+test("an unresolved variable is a usage error, not a literal request", async () => {
+  const d = spyFetch(fakeDeps({ env: `BASE=${base}` }));
+  const { code, out } = await run(["--env", "./.env", "GET", "{BASE}/x?token={TOKEN}&q={OTHER}"], d);
+  assert.equal(code, 2);
+  assert.match(out, /TOKEN/);
+  assert.match(out, /OTHER/);
+  assert.deepEqual(d.calls, []);
+});
+
+test("an unreadable explicit --env is a usage error", async () => {
+  const { code, out } = await run(["--env", "./nope.env", "GET", `${base}/x`], fakeDeps());
+  assert.equal(code, 2);
+  assert.match(out, /cannot read env file: \.\/nope\.env/);
+});
+
 test("--history lists recorded entries newest first", async () => {
   const seed = JSON.stringify([
     { at: "2026-01-02T10:00:00.000Z", method: "POST", url: "http://b", status: 201, durationMs: 5 },

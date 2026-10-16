@@ -43,12 +43,21 @@ function loadVars(envPath, readFile) {
   try {
     return parseEnv(readFile(envPath));
   } catch {
-    return {};
+    throw new Error(`cannot read env file: ${envPath}`);
   }
 }
 
 function interpolateArgs(argv, vars) {
-  return argv.map((tok) => interpolate(tok, vars).value);
+  const missing = new Set();
+  const tokens = argv.map((tok) => {
+    const { value, missing: unresolved } = interpolate(tok, vars);
+    unresolved.forEach((name) => missing.add(name));
+    return value;
+  });
+  if (missing.size > 0) {
+    throw new Error(`unresolved {${[...missing].join("}, {")}} — add it to the env file`);
+  }
+  return tokens;
 }
 
 export async function run(argv, injected = {}) {

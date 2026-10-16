@@ -27,6 +27,15 @@ req --history
 - If no `METHOD` is given, it defaults to `GET`.
 - `-H` is repeatable; its value may contain `:`.
 - `{VARIABLE}` tokens are resolved from the `--env` file (default `./.env`).
+- Usage errors (unknown flag, extra argument, `-d` with `-f`, a body on `GET`/`HEAD`,
+  an unreadable `--env` or `-f` file, an unresolved `{VARIABLE}`) print a message and exit `2`;
+  no request is sent and nothing is recorded.
+
+### History
+`req --history` lists the last 50 requests from `~/.req/history.json`, newest first.
+Before an entry is stored, URL userinfo and secret-looking query parameters
+(`token`, `api_key`, `password`, `auth`, …) are replaced with `***`, and the file is written
+`0600` inside a `0700` directory. History failures never change the outcome of the request itself.
 
 ### Examples
 ```

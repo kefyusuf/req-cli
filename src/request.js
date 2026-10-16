@@ -1,21 +1,15 @@
 import { readFileSync } from "node:fs";
 
 async function normalizeResponse(response) {
-  const ct = response.headers.get("content-type") ?? "";
-  const looksJson = ct.includes("json");
-  let data;
-  let isJson = looksJson;
-  if (looksJson) {
-    try {
-      data = await response.json();
-    } catch {
-      data = await response.text();
-      isJson = false;
-    }
-  } else {
-    data = await response.text();
+  const raw = await response.text();
+  const base = { status: response.status, statusText: response.statusText };
+  const looksJson = (response.headers.get("content-type") ?? "").includes("json");
+  if (!looksJson) return { ...base, data: raw, isJson: false };
+  try {
+    return { ...base, data: JSON.parse(raw), isJson: true };
+  } catch {
+    return { ...base, data: raw, isJson: false };
   }
-  return { status: response.status, statusText: response.statusText, data, isJson };
 }
 
 export async function sendRequest(

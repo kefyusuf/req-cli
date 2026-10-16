@@ -79,6 +79,27 @@ test("-H without value throws", () => {
   assert.throws(() => parseArgs(["GET", "http://x", "-H"]), /-H requires/);
 });
 
+test("-d without value throws", () => {
+  assert.throws(() => parseArgs(["POST", "http://x", "-d"]), /-d requires a value/);
+});
+
 test("-H value without colon throws", () => {
   assert.throws(() => parseArgs(["GET", "http://x", "-H", "oops"]), /Invalid -H/);
+});
+
+test("extra positional arguments throw", () => {
+  assert.throws(() => parseArgs(["GET", "http://x", "unexpected"]), /unexpected argument: unexpected/);
+  assert.throws(() => parseArgs(["http://x", "one", "two"]), /unexpected argument: one/);
+});
+
+test("-d together with -f throws", () => {
+  assert.throws(
+    () => parseArgs(["POST", "http://x", "-d", "inline", "-f", "p.json"]),
+    /-d and -f cannot be used together/,
+  );
+});
+
+test("body on GET or HEAD throws", () => {
+  assert.throws(() => parseArgs(["GET", "http://x", "-d", "a"]), /GET cannot have a body/);
+  assert.throws(() => parseArgs(["HEAD", "http://x", "-f", "p.json"]), /HEAD cannot have a body/);
 });

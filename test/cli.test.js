@@ -36,6 +36,20 @@ function fakeDeps({ env = "", history = "" } = {}) {
   };
 }
 
+function spyFetch(d) {
+  d.calls = [];
+  d.fetch = async (url) => {
+    d.calls.push(url);
+    return {
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => "text/plain" },
+      text: async () => "ok",
+    };
+  };
+  return d;
+}
+
 test("no args prints help", async () => {
   const { code, out } = await run([], fakeDeps());
   assert.equal(code, 0);
@@ -46,6 +60,22 @@ test("bad args exit code 2", async () => {
   const { code, out } = await run(["GET"], fakeDeps());
   assert.equal(code, 2);
   assert.match(out, /url is required/);
+});
+
+test("extra argument exits 2 without making a request", async () => {
+  const d = spyFetch(fakeDeps());
+  const { code, out } = await run(["GET", `${base}/x`, "unexpected"], d);
+  assert.equal(code, 2);
+  assert.match(out, /unexpected argument: unexpected/);
+  assert.deepEqual(d.calls, []);
+});
+
+test("an unreadable -f body file exits 2 without making a request", async () => {
+  const d = spyFetch(fakeDeps());
+  const { code, out } = await run(["POST", `${base}/x`, "-f", "missing.json"], d);
+  assert.equal(code, 2);
+  assert.match(out, /cannot read body file: missing\.json/);
+  assert.deepEqual(d.calls, []);
 });
 
 test("live request prints status and body, records history", async () => {
@@ -64,11 +94,61 @@ test("--no-history does not write history", async () => {
   assert.equal(d.written.H, undefined);
 });
 
+test("recorded history hides secrets from the url", async () => {
+  const d = fakeDeps();
+  await run(["GET", `${base}/users?api_key=SECRET`], d);
+  const hist = JSON.parse(d.written.H);
+  assert.equal(hist[0].url, `${base}/users?api_key=***`);
+  assert.doesNotMatch(d.written.H, /SECRET/);
+});
+
+test("a history write failure keeps the HTTP result", async () => {
+  const d = fakeDeps();
+  d.writeFile = () => {
+    throw new Error("EACCES history");
+  };
+  const { code, out } = await run(["GET", `${base}/x`], d);
+  assert.equal(code, 0);
+  assert.match(out, /^200 OK/);
+  assert.match(out, /history not saved \(EACCES history\)/);
+});
+
+test("a history write failure does not hide a request error", async () => {
+  const d = fakeDeps();
+  d.writeFile = () => {
+    throw new Error("EACCES history");
+  };
+  const fetch = async () => {
+    const e = new Error("fetch failed");
+    e.cause = { code: "ECONNREFUSED" };
+    throw e;
+  };
+  const { code, out } = await run(["GET", "http://127.0.0.1:1/x"], { ...d, fetch });
+  assert.equal(code, 1);
+  assert.match(out, /ECONNREFUSED/);
+  assert.match(out, /history not saved/);
+});
+
 test("env vars interpolate into URL and headers", async () => {
   const d = fakeDeps({ env: `BASE=${base}\nTOKEN=abc` });
   const { out } = await run(["--env", "./.env", "GET", "{BASE}/items", "-H", "Authorization:Bearer {TOKEN}"], d);
   assert.match(out, /"auth": "Bearer abc"/);
   assert.match(out, /"path": "\/items"/);
+});
+
+test("an unresolved variable is a usage error, not a literal request", async () => {
+  const d = spyFetch(fakeDeps({ env: `BASE=${base}` }));
+  const { code, out } = await run(["--env", "./.env", "GET", "{BASE}/x?token={TOKEN}&q={OTHER}"], d);
+  assert.equal(code, 2);
+  assert.match(out, /TOKEN/);
+  assert.match(out, /OTHER/);
+  assert.deepEqual(d.calls, []);
+});
+
+test("an unreadable explicit --env is a usage error", async () => {
+  const { code, out } = await run(["--env", "./nope.env", "GET", `${base}/x`], fakeDeps());
+  assert.equal(code, 2);
+  assert.match(out, /cannot read env file: \.\/nope\.env/);
 });
 
 test("--history lists recorded entries newest first", async () => {

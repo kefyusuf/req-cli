@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { parseArgs } from "./args.js";
@@ -29,8 +29,11 @@ function defaultDeps() {
     historyPath,
     readFile: (p) => readFileSync(p, "utf8"),
     writeFile: (p, data) => {
-      mkdirSync(dirname(p), { recursive: true });
-      writeFileSync(p, data);
+      mkdirSync(dirname(p), { recursive: true, mode: 0o700 });
+      writeFileSync(p, data, { mode: 0o600 });
+      // mode is only honoured on creation; a file or dir from an older run keeps its bits
+      chmodSync(dirname(p), 0o700);
+      chmodSync(p, 0o600);
     },
   };
 }
@@ -40,12 +43,21 @@ function loadVars(envPath, readFile) {
   try {
     return parseEnv(readFile(envPath));
   } catch {
-    return {};
+    throw new Error(`cannot read env file: ${envPath}`);
   }
 }
 
 function interpolateArgs(argv, vars) {
-  return argv.map((tok) => interpolate(tok, vars).value);
+  const missing = new Set();
+  const tokens = argv.map((tok) => {
+    const { value, missing: unresolved } = interpolate(tok, vars);
+    unresolved.forEach((name) => missing.add(name));
+    return value;
+  });
+  if (missing.size > 0) {
+    throw new Error(`unresolved {${[...missing].join("}, {")}} — add it to the env file`);
+  }
+  return tokens;
 }
 
 export async function run(argv, injected = {}) {
@@ -79,28 +91,49 @@ export async function run(argv, injected = {}) {
     return { code: 2, out: `req: ${err.message}` };
   }
 
+  const record = (entry) => {
+    if (!opts.recordHistory) return null;
+    try {
+      appendHistory(entry, historyStore);
+    } catch (err) {
+      return `req: history not saved (${err.message})`;
+    }
+    return null;
+  };
+
+  const withWarning = (out, warning) => (warning ? `${out}\n\n${warning}` : out);
+
+  if (parsed.bodyFile !== null) {
+    try {
+      deps.readFile(parsed.bodyFile);
+    } catch {
+      return { code: 2, out: `req: cannot read body file: ${parsed.bodyFile}` };
+    }
+  }
+
+  let res;
+  let failure;
   try {
-    const res = await sendRequest(parsed, {
+    res = await sendRequest(parsed, {
       fetch,
       readFile: (p) => deps.readFile(p),
       ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
     });
-    if (opts.recordHistory) {
-      appendHistory(
-        { at: new Date().toISOString(), method: parsed.method, url: parsed.url, status: res.status, durationMs: res.durationMs },
-        historyStore,
-      );
-    }
-    return { code: res.status >= 400 ? 1 : 0, out: format(res) };
   } catch (err) {
-    if (opts.recordHistory) {
-      appendHistory(
-        { at: new Date().toISOString(), method: parsed.method, url: parsed.url, error: err.cause?.code ?? err.message },
-        historyStore,
-      );
-    }
-    return { code: 1, out: format({ error: err.cause?.code ?? err.message }) };
+    failure = err.cause?.code ?? err.message;
   }
+
+  const warning = record({
+    at: new Date().toISOString(),
+    method: parsed.method,
+    url: parsed.url,
+    ...(failure === undefined
+      ? { status: res.status, durationMs: res.durationMs }
+      : { error: failure }),
+  });
+  const out = failure === undefined ? format(res) : format({ error: failure });
+  const failed = failure !== undefined || res.status >= 400;
+  return { code: failed ? 1 : 0, out: withWarning(out, warning) };
 }
 
 function safeFindEnv(deps) {
@@ -112,7 +145,17 @@ function safeFindEnv(deps) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function isDirectRun() {
+  if (!process.argv[1]) return false;
+  try {
+    const self = pathToFileURL(realpathSync(fileURLToPath(import.meta.url))).href;
+    return self === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectRun()) {
   const { code, out } = await run(process.argv.slice(2));
   console.log(out);
   process.exit(code);

@@ -24,6 +24,11 @@ before(async () => {
         }, 200);
         return;
       }
+      if (req.url === "/broken-json") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{bad json");
+        return;
+      }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({
         method: req.method,
@@ -65,4 +70,11 @@ test("real timeout aborts a slow request", async () => {
     () => sendRequest(parseArgs(["GET", `${base}/slow`]), { timeoutMs: 20 }),
     /aborted|timeout/i,
   );
+});
+
+test("malformed JSON body is returned as raw text", async () => {
+  const res = await sendRequest(parseArgs(["GET", `${base}/broken-json`]));
+  assert.equal(res.status, 200);
+  assert.equal(res.data, "{bad json");
+  assert.equal(res.isJson, false);
 });

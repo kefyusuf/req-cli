@@ -4,16 +4,22 @@ import { sendRequest } from "../src/request.js";
 
 function fakeResponse({ status = 200, statusText = "OK", ct = "application/json", json, text }) {
   const headersMap = { "content-type": ct };
+  const raw = text ?? JSON.stringify(json);
+  let consumed = false;
+  const read = () => {
+    if (consumed) throw new TypeError("Body is unusable: Body has already been read");
+    consumed = true;
+    return raw;
+  };
   return {
     status,
     statusText,
     headers: { get: (k) => headersMap[k.toLowerCase()] ?? null },
     async json() {
-      if (json === undefined) throw new Error("no json");
-      return json;
+      return JSON.parse(read());
     },
     async text() {
-      return text ?? JSON.stringify(json);
+      return read();
     },
   };
 }

@@ -72,6 +72,33 @@ test("recorded history hides secrets from the url", async () => {
   assert.doesNotMatch(d.written.H, /SECRET/);
 });
 
+test("a history write failure keeps the HTTP result", async () => {
+  const d = fakeDeps();
+  d.writeFile = () => {
+    throw new Error("EACCES history");
+  };
+  const { code, out } = await run(["GET", `${base}/x`], d);
+  assert.equal(code, 0);
+  assert.match(out, /^200 OK/);
+  assert.match(out, /history not saved \(EACCES history\)/);
+});
+
+test("a history write failure does not hide a request error", async () => {
+  const d = fakeDeps();
+  d.writeFile = () => {
+    throw new Error("EACCES history");
+  };
+  const fetch = async () => {
+    const e = new Error("fetch failed");
+    e.cause = { code: "ECONNREFUSED" };
+    throw e;
+  };
+  const { code, out } = await run(["GET", "http://127.0.0.1:1/x"], { ...d, fetch });
+  assert.equal(code, 1);
+  assert.match(out, /ECONNREFUSED/);
+  assert.match(out, /history not saved/);
+});
+
 test("env vars interpolate into URL and headers", async () => {
   const d = fakeDeps({ env: `BASE=${base}\nTOKEN=abc` });
   const { out } = await run(["--env", "./.env", "GET", "{BASE}/items", "-H", "Authorization:Bearer {TOKEN}"], d);

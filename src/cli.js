@@ -82,28 +82,41 @@ export async function run(argv, injected = {}) {
     return { code: 2, out: `req: ${err.message}` };
   }
 
+  const record = (entry) => {
+    if (!opts.recordHistory) return null;
+    try {
+      appendHistory(entry, historyStore);
+    } catch (err) {
+      return `req: history not saved (${err.message})`;
+    }
+    return null;
+  };
+
+  const withWarning = (out, warning) => (warning ? `${out}\n\n${warning}` : out);
+
+  let res;
+  let failure;
   try {
-    const res = await sendRequest(parsed, {
+    res = await sendRequest(parsed, {
       fetch,
       readFile: (p) => deps.readFile(p),
       ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
     });
-    if (opts.recordHistory) {
-      appendHistory(
-        { at: new Date().toISOString(), method: parsed.method, url: parsed.url, status: res.status, durationMs: res.durationMs },
-        historyStore,
-      );
-    }
-    return { code: res.status >= 400 ? 1 : 0, out: format(res) };
   } catch (err) {
-    if (opts.recordHistory) {
-      appendHistory(
-        { at: new Date().toISOString(), method: parsed.method, url: parsed.url, error: err.cause?.code ?? err.message },
-        historyStore,
-      );
-    }
-    return { code: 1, out: format({ error: err.cause?.code ?? err.message }) };
+    failure = err.cause?.code ?? err.message;
   }
+
+  const warning = record({
+    at: new Date().toISOString(),
+    method: parsed.method,
+    url: parsed.url,
+    ...(failure === undefined
+      ? { status: res.status, durationMs: res.durationMs }
+      : { error: failure }),
+  });
+  const out = failure === undefined ? format(res) : format({ error: failure });
+  const failed = failure !== undefined || res.status >= 400;
+  return { code: failed ? 1 : 0, out: withWarning(out, warning) };
 }
 
 function safeFindEnv(deps) {

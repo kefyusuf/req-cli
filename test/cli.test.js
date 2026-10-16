@@ -64,6 +64,14 @@ test("--no-history does not write history", async () => {
   assert.equal(d.written.H, undefined);
 });
 
+test("recorded history hides secrets from the url", async () => {
+  const d = fakeDeps();
+  await run(["GET", `${base}/users?api_key=SECRET`], d);
+  const hist = JSON.parse(d.written.H);
+  assert.equal(hist[0].url, `${base}/users?api_key=***`);
+  assert.doesNotMatch(d.written.H, /SECRET/);
+});
+
 test("env vars interpolate into URL and headers", async () => {
   const d = fakeDeps({ env: `BASE=${base}\nTOKEN=abc` });
   const { out } = await run(["--env", "./.env", "GET", "{BASE}/items", "-H", "Authorization:Bearer {TOKEN}"], d);

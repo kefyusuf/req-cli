@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { parseArgs } from "./args.js";
@@ -112,7 +112,17 @@ function safeFindEnv(deps) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function isDirectRun() {
+  if (!process.argv[1]) return false;
+  try {
+    const self = pathToFileURL(realpathSync(fileURLToPath(import.meta.url))).href;
+    return self === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectRun()) {
   const { code, out } = await run(process.argv.slice(2));
   console.log(out);
   process.exit(code);

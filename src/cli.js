@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { parseArgs } from "./args.js";
@@ -29,8 +29,11 @@ function defaultDeps() {
     historyPath,
     readFile: (p) => readFileSync(p, "utf8"),
     writeFile: (p, data) => {
-      mkdirSync(dirname(p), { recursive: true });
-      writeFileSync(p, data);
+      mkdirSync(dirname(p), { recursive: true, mode: 0o700 });
+      writeFileSync(p, data, { mode: 0o600 });
+      // mode is only honoured on creation; a file or dir from an older run keeps its bits
+      chmodSync(dirname(p), 0o700);
+      chmodSync(p, 0o600);
     },
   };
 }

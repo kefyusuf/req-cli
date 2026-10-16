@@ -51,3 +51,51 @@ test("appendHistory respects custom max", () => {
   for (let i = 0; i < 4; i++) appendHistory({ url: `u${i}` }, s);
   assert.equal(loadHistory(s).length, 2);
 });
+
+test("appendHistory masks sensitive query params in the stored url", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "https://api.example.com/users?api_key=SECRET&name=ann" }, s);
+  assert.equal(loadHistory(s)[0].url, "https://api.example.com/users?api_key=***&name=ann");
+});
+
+test("appendHistory masks url userinfo", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "https://user:pw@api.example.com/x" }, s);
+  assert.equal(loadHistory(s)[0].url, "https://***@api.example.com/x");
+});
+
+test("appendHistory leaves non-secret urls untouched", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "http://localhost:3000/users?page=2" }, s);
+  assert.equal(loadHistory(s)[0].url, "http://localhost:3000/users?page=2");
+});
+
+test("appendHistory masks every occurrence of a secret param", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "https://x/y?token=a&token=b&keep=1" }, s);
+  assert.equal(loadHistory(s)[0].url, "https://x/y?token=***&token=***&keep=1");
+});
+
+test("appendHistory masks secrets in a url that is not valid", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "http://my server/x?token=SECRET" }, s);
+  assert.equal(loadHistory(s)[0].url, "http://my server/x?token=***");
+});
+
+test("appendHistory masks oauth code, password and dotted names", () => {
+  const s = memStore();
+  appendHistory({ method: "POST", url: "https://x/cb?code=abc&password=pw&a.b.key=k" }, s);
+  assert.equal(loadHistory(s)[0].url, "https://x/cb?code=***&password=***&a.b.key=***");
+});
+
+test("appendHistory keeps the url as written when masking", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "HTTP://LocalHost:3000/Users?api_key=S#frag" }, s);
+  assert.equal(loadHistory(s)[0].url, "HTTP://LocalHost:3000/Users?api_key=***#frag");
+});
+
+test("appendHistory does not mask names that merely contain a secret word", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "https://x/y?author=ann&monkey=1&sortkey=id" }, s);
+  assert.equal(loadHistory(s)[0].url, "https://x/y?author=ann&monkey=1&sortkey=id");
+});

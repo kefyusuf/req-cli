@@ -1,11 +1,33 @@
 {
-  "name": "req",
+  "name": "req-tern",
   "version": "0.1.1",
   "description": "Unbloated terminal HTTP client.",
   "type": "module",
   "bin": { "req": "src/cli.js" },
+  "files": ["src", "README.md", "LICENSE"],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prepublishOnly": "npm test"
   },
+  "keywords": [
+    "http",
+    "cli",
+    "terminal",
+    "client",
+    "curl",
+    "httpie",
+    "postman",
+    "api",
+    "rest",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "author": "Yusuf KEF",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kefyusuf/req-cli.git"
+  },
+  "bugs": { "url": "https://github.com/kefyusuf/req-cli/issues" },
+  "homepage": "https://github.com/kefyusuf/req-cli#readme",
   "engines": { "node": ">=20" }
 }

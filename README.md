@@ -11,12 +11,14 @@ When you don't want to open a browser or a heavy GUI just to hit one API endpoin
 
 ## Install
 ```
-git clone <repo> && cd req-cli
+npm install -g req-tern     # the command is `req`
 ```
-Node 20+ is enough; no `npm install` needed. Optional global link:
+From a clone, for development:
 ```
-npm link      # then `req ...` works from anywhere
+git clone https://github.com/kefyusuf/req-cli && cd req-cli
+npm link                    # then `req ...` works from anywhere
 ```
+Node 20+ is the only requirement; the package has no runtime dependencies, so there is nothing to `npm install`.
 
 ## Usage
 ```
@@ -64,3 +66,6 @@ npm test
 
 ## Note
 This is a learning/portfolio piece, built around JavaScript fundamentals (async, I/O, parsing) and TDD practice.
+
+## License
+MIT — see [LICENSE](LICENSE).

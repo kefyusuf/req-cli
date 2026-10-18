@@ -117,3 +117,15 @@ test("appendHistory tolerates malformed percent escapes in query names", () => {
   appendHistory({ method: "GET", url: "https://x/y?bad%XX=x&token=SECRET" }, s);
   assert.equal(loadHistory(s)[0].url, "https://x/y?bad%XX=x&token=***");
 });
+
+test("appendHistory masks encoded secret names even with malformed escapes elsewhere", () => {
+  const s = memStore();
+  appendHistory({
+    method: "GET",
+    url: "https://x/y?unrelated%XX.api%5Fkey=SECRET&%FF.%74oken=ANOTHER",
+  }, s);
+  assert.equal(
+    loadHistory(s)[0].url,
+    "https://x/y?unrelated%XX.api%5Fkey=***&%FF.%74oken=***",
+  );
+});

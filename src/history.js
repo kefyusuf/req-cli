@@ -8,8 +8,15 @@ const SECRET_WORDS = new Set([
 const REDACTED = "***";
 
 // Raw-text masking: urls that are not valid (parseArgs only checks the scheme) must not leak either.
-const isSecretName = (name) =>
-  name.toLowerCase().split(/[-_.]+/).some((part) => SECRET_WORDS.has(part));
+const isSecretName = (name) => {
+  let decoded = name;
+  try {
+    decoded = decodeURIComponent(name.replace(/\+/g, " "));
+  } catch {
+    // Keep the raw name if an escape sequence is malformed.
+  }
+  return decoded.toLowerCase().split(/[-_.]+/).some((part) => SECRET_WORDS.has(part));
+};
 
 function maskUrl(url) {
   return url

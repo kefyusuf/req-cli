@@ -99,3 +99,33 @@ test("appendHistory does not mask names that merely contain a secret word", () =
   appendHistory({ method: "GET", url: "https://x/y?author=ann&monkey=1&sortkey=id" }, s);
   assert.equal(loadHistory(s)[0].url, "https://x/y?author=ann&monkey=1&sortkey=id");
 });
+
+test("appendHistory masks percent-encoded secret query parameter names", () => {
+  const s = memStore();
+  appendHistory({
+    method: "GET",
+    url: "https://x/y?api%5Fkey=SECRET&%74oken=ANOTHER&page%5Fsize=20",
+  }, s);
+  assert.equal(
+    loadHistory(s)[0].url,
+    "https://x/y?api%5Fkey=***&%74oken=***&page%5Fsize=20",
+  );
+});
+
+test("appendHistory tolerates malformed percent escapes in query names", () => {
+  const s = memStore();
+  appendHistory({ method: "GET", url: "https://x/y?bad%XX=x&token=SECRET" }, s);
+  assert.equal(loadHistory(s)[0].url, "https://x/y?bad%XX=x&token=***");
+});
+
+test("appendHistory masks encoded secret names even with malformed escapes elsewhere", () => {
+  const s = memStore();
+  appendHistory({
+    method: "GET",
+    url: "https://x/y?unrelated%XX.api%5Fkey=SECRET&%FF.%74oken=ANOTHER",
+  }, s);
+  assert.equal(
+    loadHistory(s)[0].url,
+    "https://x/y?unrelated%XX.api%5Fkey=***&%FF.%74oken=***",
+  );
+});
